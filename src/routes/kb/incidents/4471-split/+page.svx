@@ -1,0 +1,49 @@
+---
+layout: runbook
+title: '#4471 split · one ticket per problem'
+owner: James F.
+status: open
+reviewed: 2026-10-31
+signature: James F.
+---
+
+<script>
+  import SplitTable from '#lib/kb/SplitTable.svelte';
+  import Callout from '#lib/kb/Callout.svelte';
+  import RenderStamp from '#lib/kb/RenderStamp.svelte';
+</script>
+
+[#4471](/kb/incidents/4471) is marked known, with one fix queued for the parser. The reports merged into it
+describe more than one problem, and the parser fix covers only one of them. Each problem now has its own ticket.
+
+<SplitTable ticket={4471} repo="krispy-bacon-bits/MegaDev" issues={{ parser: 1, hint: 2, 'one-day move': 3 }} />
+
+## The problems
+
+**`parser`** ([issue 1](https://github.com/krispy-bacon-bits/MegaDev/issues/1)). The shared parser reads every
+date month first, and every tenant on #4471 writes the day first. Day and month come out swapped. "Our 7 April
+reminder went out on 4 July."
+
+**`hint`** ([issue 2](https://github.com/krispy-bacon-bits/MegaDev/issues/2)). The booking-v3 form prints
+`MM/DD/YYYY` under its date field, then reads the date day first. People type what the hint tells them and the
+date comes out swapped. This form already reads day first, so the parser fix does not change it.
+
+**`one-day move`** ([issue 3](https://github.com/krispy-bacon-bits/MegaDev/issues/3)). These dates are one day off,
+not swapped. "Client in Lisbon got Tuesday. Client in Toronto got Monday. Same meeting." That points at time zone
+handling. The desk listed these reports in `desk-notes.json`, but the table on #4471 still counts them as `parser`.
+
+<Callout kind="warn">
+Do not close #4471 as fixed when the parser fix ships. Issues 2 and 3 stay open until their own fixes land.
+</Callout>
+
+## How the reports were counted
+
+- One id, one report. The export pages overlap, so some reports appear twice.
+- A report goes where its tenant's locale, booking form and channel put it (`causes.ts`), not where intake tagged
+  it. Intake guesses from the reporter's browser, and the tags above show how often it guessed wrong.
+- The one-day moves come from the desk's own reading in `desk-notes.json`. When the desk adds a report there, it
+  moves to the `one-day move` row on the next build.
+- Matching on subject line ([decision 0001](/kb/decisions/0001-dedupe-by-subject)) is how all of this ended up in
+  one ticket. The same subject line turns up under different problems, so subjects cannot tell them apart.
+
+<RenderStamp {signature} />
