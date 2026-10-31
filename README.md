@@ -34,3 +34,8 @@ Support desk. Decision records: whoever signed them.
 ---
 
 Exported 2026-10-04 from the `support` repo, `apps/kb/` → `src/`.
+
+## Rendering
+
+`npm install`, then `npm run render`. It builds every page to `build/` and writes a one-file copy of a page,
+as the desk sees it, to `rendered/` (default `kb/incidents/4471-split`).
