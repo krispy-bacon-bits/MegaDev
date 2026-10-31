@@ -41,8 +41,8 @@ Do not close #4471 as fixed when the parser fix ships. Issues 2 and 3 stay open 
 - One id, one report. The export pages overlap, so some reports appear twice.
 - A report goes where its tenant's locale, booking form and channel put it (`causes.ts`), not where intake tagged
   it. Intake guesses from the reporter's browser, and the tags above show how often it guessed wrong.
-- The one-day moves come from the desk's own reading in `desk-notes.json`. When the desk adds a report there, it
-  moves to the `one-day move` row on the next build.
+- The one-day moves come from the desk's own reading in `desk-notes.json`. They stay counted where the desk files
+  them and get a row of their own. When the desk adds a report there, it joins that row on the next build.
 - Matching on subject line ([decision 0001](/kb/decisions/0001-dedupe-by-subject)) is how all of this ended up in
   one ticket. The same subject line turns up under different problems, so subjects cannot tell them apart.
 

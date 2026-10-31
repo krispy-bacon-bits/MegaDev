@@ -1,16 +1,11 @@
-// Which problem each report merged into a ticket belongs to. causes.ts places a report by its tenant;
-// the desk's own reading (desk-notes.json) takes the one-day moves out first, because a date that is one
-// day off is not a date-order bug at all.
-import { causeOf, uniqueById, type Cause, type Report, type Tenant } from '#lib/kb/causes';
+// One row per problem in a ticket, counted the way the desk counts (causes.ts, as exported): every report
+// sits under the cause its tenant puts it in. The reports the desk read as a one-day move (desk-notes.json)
+// are a problem of their own, so they get their own row too, and stay counted where they are filed.
+import { groupByCause, readAs, uniqueById, type CauseGroup, type Report, type Tenant } from '#lib/kb/causes';
 
-export type Problem = Cause | 'one-day move' | 'unplaced';
+export type Problem = CauseGroup['cause'] | 'one-day move';
 
-export function problemOf(r: Report, t: Tenant | undefined, oneDayMove: readonly string[]): Problem {
-  if (oneDayMove.includes(r.id)) return 'one-day move';
-  return causeOf(r, t) ?? 'unplaced';
-}
-
-export type ProblemGroup = {
+export type ProblemRow = {
   problem: Problem;
   reports: Report[];
   tenants: number;
@@ -19,17 +14,31 @@ export type ProblemGroup = {
   taggedAs: Record<string, number>;
   firstSeen: string;
   lastSeen: string;
+  // How many of these reports are also counted on another row.
+  alsoIn: { problem: Problem; count: number }[];
 };
 
 const tally = (xs: string[]) => xs.reduce<Record<string, number>>((n, x) => ({ ...n, [x]: (n[x] ?? 0) + 1 }), {});
 
+function row(problem: Problem, rs: Report[]): ProblemRow {
+  const days = rs.map((r) => r.receivedAt.slice(0, 10)).sort();
+  return {
+    problem,
+    reports: rs,
+    tenants: new Set(rs.map((r) => r.tenant)).size,
+    channels: tally(rs.map((r) => r.channel)),
+    taggedAs: tally(rs.map((r) => r.meta.intakeTag)),
+    firstSeen: days[0],
+    lastSeen: days[days.length - 1],
+    alsoIn: [],
+  };
+}
+
 export type Split = {
-  // Rows in the export, before one id = one report.
+  // Rows in the export for this ticket, before one id = one report.
   rows: number;
   merged: Report[];
-  groups: ProblemGroup[];
-  // What the desk's table (CauseTable) counts under each cause, one-day moves included.
-  deskCounts: Record<string, number>;
+  problems: ProblemRow[];
 };
 
 export function splitTicket(
@@ -39,25 +48,18 @@ export function splitTicket(
   oneDayMove: readonly string[],
 ): Split {
   const merged = uniqueById(all).filter((r) => r.mergedInto === ticket);
-  const byProblem = new Map<Problem, Report[]>();
-  for (const r of merged) {
-    const p = problemOf(r, tenantOf(r), oneDayMove);
-    byProblem.set(p, [...(byProblem.get(p) ?? []), r]);
+  const groups = groupByCause(merged, tenantOf);
+  const problems = groups.map((g) => row(g.cause, g.reports));
+  const moved = merged.filter((r) => oneDayMove.includes(r.id));
+  if (moved.length) {
+    const shift = row('one-day move', moved);
+    for (const g of groups) {
+      const n = readAs(g, oneDayMove);
+      if (!n) continue;
+      problems.find((p) => p.problem === g.cause)!.alsoIn.push({ problem: shift.problem, count: n });
+      shift.alsoIn.push({ problem: g.cause, count: n });
+    }
+    problems.push(shift);
   }
-  const groups = [...byProblem.entries()]
-    .map(([problem, rs]) => {
-      const days = rs.map((r) => r.receivedAt.slice(0, 10)).sort();
-      return {
-        problem,
-        reports: rs,
-        tenants: new Set(rs.map((r) => r.tenant)).size,
-        channels: tally(rs.map((r) => r.channel)),
-        taggedAs: tally(rs.map((r) => r.meta.intakeTag)),
-        firstSeen: days[0],
-        lastSeen: days[days.length - 1],
-      };
-    })
-    .sort((a, b) => b.reports.length - a.reports.length);
-  const deskCounts = tally(merged.map((r) => causeOf(r, tenantOf(r)) ?? 'unplaced'));
-  return { rows: all.filter((r) => r.mergedInto === ticket).length, merged, groups, deskCounts };
+  return { rows: all.filter((r) => r.mergedInto === ticket).length, merged, problems };
 }
